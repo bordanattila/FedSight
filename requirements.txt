@@ -1,0 +1,21 @@
+# API
+fastapi
+uvicorn[standard]
+httpx
+
+# Database
+psycopg2-binary
+sqlalchemy
+alembic
+
+# Data processing
+pandas
+
+# Utilities
+python-dotenv
+requests
+
+# Testing
+pytest
+pytest-asyncio
+httpx
