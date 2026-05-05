@@ -1,3 +1,5 @@
+![Tests](https://github.com/bordanattila/FedSight/actions/workflows/test.yml/badge.svg)
+
 # FedSight
 
 Decision-support tool for FEMA-style regional risk analysis. Combines FEMA disaster declarations, USAspending federal obligations, and NOAA hurricane track data into a state-level risk map.

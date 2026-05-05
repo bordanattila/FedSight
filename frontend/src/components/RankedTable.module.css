@@ -1,0 +1,104 @@
+.section {
+  margin-bottom: 2.5rem;
+}
+
+.heading {
+  font-size: 1.125rem;
+  font-weight: 600;
+  color: #e2e8f0;
+  margin: 0 0 1.25rem;
+  letter-spacing: 0.01em;
+}
+
+.tableWrapper {
+  overflow-x: auto;
+  border-radius: 10px;
+  border: 1px solid #2d3748;
+}
+
+.table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.8125rem;
+}
+
+.table thead tr {
+  background: #161c2a;
+}
+
+.table th {
+  padding: 0.75rem 1rem;
+  text-align: left;
+  font-size: 0.6875rem;
+  font-weight: 600;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+  color: #718096;
+  border-bottom: 1px solid #2d3748;
+  white-space: nowrap;
+}
+
+.table td {
+  padding: 0.625rem 1rem;
+  color: #cbd5e0;
+  border-bottom: 1px solid #1a2030;
+  white-space: nowrap;
+}
+
+.even { background: #1a2030; }
+.odd  { background: #1e2535; }
+
+.table tbody tr:last-child td {
+  border-bottom: none;
+}
+
+.table tbody tr:hover td {
+  background: #243050;
+}
+
+.rankCol {
+  width: 2.5rem;
+  text-align: center !important;
+}
+
+.numCol {
+  text-align: right;
+}
+
+.muted {
+  color: #4a5568;
+  font-size: 0.75rem;
+}
+
+.stateName {
+  font-weight: 600;
+  color: #e2e8f0;
+  margin-right: 0.5rem;
+}
+
+.stateCodeBadge {
+  font-size: 0.6875rem;
+  color: #718096;
+  background: #2d3748;
+  padding: 0.1rem 0.375rem;
+  border-radius: 3px;
+}
+
+.score {
+  font-weight: 700;
+  color: #e2e8f0;
+  font-variant-numeric: tabular-nums;
+}
+
+.badge {
+  font-size: 0.6875rem;
+  font-weight: 600;
+  padding: 0.175rem 0.5rem;
+  border-radius: 4px;
+  letter-spacing: 0.04em;
+}
+
+.high     { background: rgba(252, 92, 92, 0.15); color: #fc5c5c; }
+.moderate { background: rgba(246,173, 85, 0.15); color: #f6ad55; }
+.low      { background: rgba(104,211,145, 0.15); color: #68d391; }
+.unknown  { background: #2d3748; color: #718096; }
