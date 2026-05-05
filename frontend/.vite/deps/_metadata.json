@@ -1,0 +1,58 @@
+{
+  "hash": "3d0cb4d6",
+  "configHash": "2c0e9219",
+  "lockfileHash": "2b8f9dc0",
+  "browserHash": "a1df76d0",
+  "optimized": {
+    "d3-geo": {
+      "src": "../../node_modules/d3-geo/src/index.js",
+      "file": "d3-geo.js",
+      "fileHash": "18ccf655",
+      "needsInterop": false
+    },
+    "react-dom/client": {
+      "src": "../../node_modules/react-dom/client.js",
+      "file": "react-dom_client.js",
+      "fileHash": "eebf2a16",
+      "needsInterop": true
+    },
+    "react": {
+      "src": "../../node_modules/react/index.js",
+      "file": "react.js",
+      "fileHash": "940031eb",
+      "needsInterop": true
+    },
+    "react/jsx-dev-runtime": {
+      "src": "../../node_modules/react/jsx-dev-runtime.js",
+      "file": "react_jsx-dev-runtime.js",
+      "fileHash": "ec23805a",
+      "needsInterop": true
+    },
+    "recharts": {
+      "src": "../../node_modules/recharts/es6/index.js",
+      "file": "recharts.js",
+      "fileHash": "9a306070",
+      "needsInterop": false
+    },
+    "topojson-client": {
+      "src": "../../node_modules/topojson-client/src/index.js",
+      "file": "topojson-client.js",
+      "fileHash": "25a774b6",
+      "needsInterop": false
+    }
+  },
+  "chunks": {
+    "range--3LknbWr": {
+      "file": "range--3LknbWr.js",
+      "isDynamicEntry": false
+    },
+    "react-BDWiK9rz": {
+      "file": "react-BDWiK9rz.js",
+      "isDynamicEntry": false
+    },
+    "react-dom-CQ09sKIc": {
+      "file": "react-dom-CQ09sKIc.js",
+      "isDynamicEntry": false
+    }
+  }
+}
