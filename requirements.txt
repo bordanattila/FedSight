@@ -6,16 +6,10 @@ httpx
 # Database
 psycopg2-binary
 sqlalchemy
-alembic
 
-# Data processing
-pandas
-
-# Utilities
-python-dotenv
+# Data ingestion
 requests
+python-dotenv
 
 # Testing
 pytest
-pytest-asyncio
-httpx

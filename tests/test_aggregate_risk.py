@@ -20,6 +20,7 @@ from ingestion.aggregate_risk import (
 
 _COLS = [
     "state_code",
+    "state_name",
     "total_declarations",
     "declarations_last_5_years",
     "declarations_last_10_years",
@@ -28,9 +29,9 @@ _COLS = [
 ]
 
 _THREE_STATES = [
-    ("TX", 200, 30, 60, 15, 2024),
-    ("FL", 180, 25, 50, 30, 2023),
-    ("CA", 100, 10, 20,  0, 2022),
+    ("TX", "Texas",      200, 30, 60, 15, 2024),
+    ("FL", "Florida",    180, 25, 50, 30, 2023),
+    ("CA", "California", 100, 10, 20,  0, 2022),
 ]
 
 
@@ -46,12 +47,17 @@ def _mock_conn(rows=_THREE_STATES):
     return conn, cur
 
 
-def _row(final_score, *, total=100, last5=10, hurricanes=5):
+def _row(final_score, *, total=100, last5=10, hurricanes=5,
+         state_name="Test State", d_score=50.0, r_score=50.0, h_score=50.0):
     return {
+        "state_name": state_name,
         "total_declarations": total,
         "declarations_last_5_years": last5,
         "hurricane_count": hurricanes,
         "final_risk_score": final_score,
+        "disaster_count_score": d_score,
+        "recent_activity_score": r_score,
+        "hurricane_exposure_score": h_score,
     }
 
 
@@ -96,34 +102,55 @@ class TestMinmax:
 
 class TestBuildExplanation:
     def test_high_risk_at_threshold(self):
-        assert build_explanation(_row(75.0)).startswith("High risk")
+        assert "high risk" in build_explanation(_row(75.0))
 
     def test_high_risk_above_threshold(self):
-        assert build_explanation(_row(90.0)).startswith("High risk")
+        assert "high risk" in build_explanation(_row(90.0))
 
     def test_moderate_risk_at_threshold(self):
-        assert build_explanation(_row(45.0)).startswith("Moderate risk")
+        assert "moderate risk" in build_explanation(_row(45.0))
 
     def test_moderate_risk_midrange(self):
-        assert build_explanation(_row(60.0)).startswith("Moderate risk")
+        assert "moderate risk" in build_explanation(_row(60.0))
 
     def test_moderate_risk_just_below_high(self):
-        assert build_explanation(_row(74.99)).startswith("Moderate risk")
+        assert "moderate risk" in build_explanation(_row(74.99))
 
     def test_lower_risk_just_below_moderate(self):
-        assert build_explanation(_row(44.99)).startswith("Lower risk")
+        assert "lower risk" in build_explanation(_row(44.99))
 
     def test_lower_risk_at_zero(self):
-        assert build_explanation(_row(0.0)).startswith("Lower risk")
+        assert "lower risk" in build_explanation(_row(0.0))
+
+    def test_state_name_appears_in_explanation(self):
+        assert "Florida" in build_explanation(_row(80.0, state_name="Florida"))
 
     def test_contains_total_declarations(self):
-        assert "123 total FEMA declarations" in build_explanation(_row(80.0, total=123))
+        assert "123 total declarations" in build_explanation(_row(80.0, total=123))
 
     def test_contains_last_5_years(self):
-        assert "17 in the last 5 years" in build_explanation(_row(80.0, last5=17))
+        assert "17 in the last five years" in build_explanation(_row(80.0, last5=17))
 
     def test_contains_hurricane_count(self):
-        assert "8 hurricane declaration(s)" in build_explanation(_row(80.0, hurricanes=8))
+        assert "8 hurricane declarations" in build_explanation(_row(80.0, hurricanes=8))
+
+    def test_zero_hurricanes_omits_hurricane_clause(self):
+        result = build_explanation(_row(80.0, hurricanes=0))
+        assert "hurricane declarations" not in result
+
+    def test_high_scores_use_strong_language(self):
+        result = build_explanation(_row(90.0, d_score=90.0, r_score=90.0, h_score=90.0))
+        assert "a high FEMA disaster declaration history" in result
+        assert "substantial recent activity" in result
+        assert "repeated hurricane-related declarations" in result
+
+    def test_combines_phrasing_for_multiple_factors(self):
+        result = build_explanation(_row(80.0, d_score=80.0, r_score=80.0, h_score=30.0))
+        assert "combines" in result
+
+    def test_low_scores_use_limited_language(self):
+        result = build_explanation(_row(20.0, d_score=10.0, r_score=10.0, h_score=10.0))
+        assert "limited" in result
 
     def test_ends_with_period(self):
         assert build_explanation(_row(60.0)).endswith(".")
@@ -157,7 +184,7 @@ class TestComputeScores:
 
     @patch("ingestion.aggregate_risk.execute_values")
     def test_single_state_produces_one_row(self, mock_ev):
-        conn, _ = _mock_conn([("AK", 50, 5, 10, 2, 2020)])
+        conn, _ = _mock_conn([("AK", "Alaska", 50, 5, 10, 2, 2020)])
         compute_scores(conn)
         assert len(mock_ev.call_args[0][2]) == 1
 

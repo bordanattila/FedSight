@@ -1,10 +1,24 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { geoAlbersUsa, geoPath } from "d3-geo";
 import { feature } from "topojson-client";
 import type { Topology, GeometryCollection } from "topojson-specification";
 import type { Feature, Geometry } from "geojson";
 import type { StateRisk } from "../types";
 import styles from "./RiskMap.module.css";
+
+const fmt = new Intl.NumberFormat();
+
+function topIncidentType(s: StateRisk): string {
+  const candidates = [
+    { label: "Hurricane",    count: s.hurricane_count    ?? 0 },
+    { label: "Flood",        count: s.flood_count        ?? 0 },
+    { label: "Fire",         count: s.fire_count         ?? 0 },
+    { label: "Severe Storm", count: s.severe_storm_count ?? 0 },
+    { label: "Tornado",      count: s.tornado_count      ?? 0 },
+  ];
+  const top = candidates.reduce((best, c) => (c.count > best.count ? c : best));
+  return top.count > 0 ? top.label : "—";
+}
 
 const GEO_URL = "https://cdn.jsdelivr.net/npm/us-atlas@3/states-10m.json";
 const W = 960;
@@ -52,8 +66,18 @@ interface Props {
 export function RiskMap({ states }: Props) {
   const [features, setFeatures] = useState<Feature<Geometry>[]>([]);
   const [tooltip, setTooltip] = useState<Tooltip | null>(null);
+  const [pinned, setPinned] = useState<StateRisk | null>(null);
 
-  const scoreMap = Object.fromEntries(states.map((s) => [s.state_code, s]));
+  const scoreMap = useMemo(
+    () => Object.fromEntries(states.map((s) => [s.state_code, s])),
+    [states]
+  );
+
+  // Clear tooltip and pinned card when the filtered set changes.
+  useEffect(() => {
+    setTooltip(null);
+    setPinned(null);
+  }, [states]);
 
   useEffect(() => {
     fetch(GEO_URL)
@@ -79,13 +103,16 @@ export function RiskMap({ states }: Props) {
             const d = pathGen(geo);
             if (!d) return null;
 
+            const isSelected = pinned?.state_code === code;
+
             return (
               <path
                 key={String(geo.id)}
+                data-testid={code ? `state-${code}` : undefined}
                 d={d}
                 fill={fillColor(stateData?.final_risk_score ?? null)}
-                stroke="#111827"
-                strokeWidth={0.5}
+                stroke={isSelected ? "#ffffff" : "#111827"}
+                strokeWidth={isSelected ? 1.5 : 0.5}
                 style={{ cursor: stateData ? "pointer" : "default", outline: "none" }}
                 onMouseEnter={(e) => {
                   if (!stateData) return;
@@ -96,6 +123,12 @@ export function RiskMap({ states }: Props) {
                   setTooltip((t) => (t ? { ...t, x: e.clientX, y: e.clientY } : t));
                 }}
                 onMouseLeave={() => setTooltip(null)}
+                onClick={() => {
+                  if (!stateData) return;
+                  setPinned((p) =>
+                    p?.state_code === stateData.state_code ? null : stateData
+                  );
+                }}
               />
             );
           })}
@@ -103,18 +136,99 @@ export function RiskMap({ states }: Props) {
 
         {tooltip && (
           <div
+            data-testid="map-tooltip"
             className={styles.tooltip}
             style={{ left: tooltip.x + 12, top: tooltip.y - 8 }}
           >
-            <strong>{tooltip.state.state_name}</strong>
-            <div>
-              Risk score:{" "}
-              <span className={styles.scoreVal}>
+            <div className={styles.tooltipName}>{tooltip.state.state_name}</div>
+            <dl className={styles.tooltipGrid}>
+              <dt>Risk Score</dt>
+              <dd className={styles.scoreVal}>
                 {tooltip.state.final_risk_score?.toFixed(1) ?? "—"}
+              </dd>
+
+              <dt>Total FEMA Declarations</dt>
+              <dd>{tooltip.state.total_declarations != null ? fmt.format(tooltip.state.total_declarations) : "—"}</dd>
+
+              <dt>Declarations Last 5 Years</dt>
+              <dd>{tooltip.state.declarations_last_5_years ?? "—"}</dd>
+
+              <dt>Hurricane Declarations</dt>
+              <dd>{tooltip.state.hurricane_count ?? "—"}</dd>
+
+              <dt>Top Incident Type</dt>
+              <dd>{topIncidentType(tooltip.state)}</dd>
+            </dl>
+            {tooltip.state.explanation && (
+              <p className={styles.tooltipExplanation}>{tooltip.state.explanation}</p>
+            )}
+          </div>
+        )}
+
+        {pinned && (
+          <div data-testid="state-detail-panel" className={styles.detailPanel}>
+            <button
+              className={styles.detailClose}
+              onClick={() => setPinned(null)}
+              aria-label="Close detail panel"
+            >
+              ×
+            </button>
+            <div className={styles.detailName}>
+              {pinned.state_name}
+              <span className={styles.detailCode}>{pinned.state_code}</span>
+            </div>
+
+            <div className={styles.detailScoreRow}>
+              <span className={styles.detailScoreLabel}>Risk Score</span>
+              <span className={styles.detailScoreVal}>
+                {pinned.final_risk_score?.toFixed(1) ?? "—"}
               </span>
             </div>
-            <div>Declarations: {tooltip.state.total_declarations ?? "—"}</div>
-            <div>Hurricanes: {tooltip.state.hurricane_count ?? "—"}</div>
+
+            <dl className={styles.detailGrid}>
+              <dt>Disaster Count</dt>
+              <dd>{pinned.disaster_count_score?.toFixed(1) ?? "—"}</dd>
+              <dt>Recent Activity</dt>
+              <dd>{pinned.recent_activity_score?.toFixed(1) ?? "—"}</dd>
+              <dt>Hurricane Exposure</dt>
+              <dd>{pinned.hurricane_exposure_score?.toFixed(1) ?? "—"}</dd>
+              <dt>Spending Gap</dt>
+              <dd>{pinned.spending_gap_score?.toFixed(1) ?? "—"}</dd>
+
+              <dt className={styles.detailDivider}>Total Declarations</dt>
+              <dd className={styles.detailDivider}>{pinned.total_declarations != null ? fmt.format(pinned.total_declarations) : "—"}</dd>
+              <dt>Major Disaster</dt>
+              <dd>{pinned.major_disaster_declarations ?? "—"}</dd>
+              <dt>Emergency</dt>
+              <dd>{pinned.emergency_declarations ?? "—"}</dd>
+              <dt>Last 5 Years</dt>
+              <dd>{pinned.declarations_last_5_years ?? "—"}</dd>
+              <dt>Last 10 Years</dt>
+              <dd>{pinned.declarations_last_10_years ?? "—"}</dd>
+
+              <dt className={styles.detailDivider}>Hurricane</dt>
+              <dd className={styles.detailDivider}>{pinned.hurricane_count ?? "—"}</dd>
+              <dt>Flood</dt>
+              <dd>{pinned.flood_count ?? "—"}</dd>
+              <dt>Fire</dt>
+              <dd>{pinned.fire_count ?? "—"}</dd>
+              <dt>Severe Storm</dt>
+              <dd>{pinned.severe_storm_count ?? "—"}</dd>
+              <dt>Tornado</dt>
+              <dd>{pinned.tornado_count ?? "—"}</dd>
+
+              {pinned.most_recent_disaster_year != null && (
+                <>
+                  <dt className={styles.detailDivider}>Most Recent Year</dt>
+                  <dd className={styles.detailDivider}>{pinned.most_recent_disaster_year}</dd>
+                </>
+              )}
+            </dl>
+
+            {pinned.explanation && (
+              <p className={styles.detailExplanation}>{pinned.explanation}</p>
+            )}
           </div>
         )}
 
@@ -124,7 +238,7 @@ export function RiskMap({ states }: Props) {
             { color: "#fc5c5c", label: "High (≥75)" },
             { color: "#f6ad55", label: "Moderate (45–74)" },
             { color: "#68d391", label: "Lower (<45)" },
-            { color: "#2d3748", label: "No data" },
+            { color: "#2d3748", label: "Not in current filter" },
           ].map(({ color, label }) => (
             <span key={label} className={styles.legendItem}>
               <span className={styles.swatch} style={{ background: color }} />

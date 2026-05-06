@@ -1,6 +1,9 @@
 import { useEffect, useState } from "react";
 import { fetchAllStateRisks } from "./api";
 import type { StateRisk } from "./types";
+import { applyFilters, DEFAULT_FILTERS } from "./lib/filterStates";
+import type { Filters } from "./lib/filterStates";
+import { FilterBar } from "./components/FilterBar";
 import { TopRiskCards } from "./components/TopRiskCards";
 import { RiskBarChart } from "./components/RiskBarChart";
 import { RiskMap } from "./components/RiskMap";
@@ -13,6 +16,7 @@ export default function App() {
   const [states, setStates] = useState<StateRisk[]>([]);
   const [status, setStatus] = useState<Status>("loading");
   const [error, setError] = useState<string | null>(null);
+  const [filters, setFilters] = useState<Filters>(DEFAULT_FILTERS);
 
   useEffect(() => {
     fetchAllStateRisks()
@@ -25,6 +29,8 @@ export default function App() {
         setStatus("error");
       });
   }, []);
+
+  const filtered = applyFilters(states, filters);
 
   return (
     <div className={styles.shell}>
@@ -67,10 +73,24 @@ export default function App() {
 
         {status === "ok" && states.length > 0 && (
           <>
-            <TopRiskCards states={states.slice(0, 3)} />
-            <RiskMap states={states} />
-            <RiskBarChart states={states} />
-            <RankedTable states={states} />
+            <FilterBar
+              filters={filters}
+              onChange={setFilters}
+              resultCount={filtered.length}
+              totalCount={states.length}
+            />
+            {filtered.length === 0 ? (
+              <div className={styles.emptyBox}>
+                <p>No states match the current filters.</p>
+              </div>
+            ) : (
+              <>
+                <TopRiskCards states={filtered.slice(0, 3)} />
+                <RiskMap states={filtered} />
+                <RiskBarChart states={filtered} filters={filters} />
+                <RankedTable states={filtered} />
+              </>
+            )}
           </>
         )}
       </main>

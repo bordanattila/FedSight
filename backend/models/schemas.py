@@ -17,9 +17,15 @@ class StateRisk(BaseModel):
     explanation: Optional[str]
 
     total_declarations: Optional[int]
-    major_disaster_declarations: Optional[int]
+    major_disaster_declarations: Optional[int] = None
+    emergency_declarations: Optional[int] = None
     hurricane_count: Optional[int]
+    flood_count: Optional[int]
+    fire_count: Optional[int]
+    severe_storm_count: Optional[int]
+    tornado_count: Optional[int]
     declarations_last_5_years: Optional[int]
+    declarations_last_10_years: Optional[int] = None
     most_recent_disaster_year: Optional[int]
 
     model_config = {"from_attributes": True}

@@ -22,25 +22,171 @@
   position: fixed;
   background: #161c2a;
   border: 1px solid #2d3748;
-  border-radius: 8px;
-  padding: 0.625rem 0.875rem;
+  border-radius: 10px;
+  padding: 0.875rem 1rem;
   font-size: 0.8125rem;
   color: #a0aec0;
-  line-height: 1.6;
+  line-height: 1.5;
   pointer-events: none;
   z-index: 50;
   white-space: nowrap;
+  min-width: 220px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
 }
 
-.tooltip strong {
-  display: block;
+.tooltipName {
+  font-size: 0.9375rem;
+  font-weight: 700;
   color: #e2e8f0;
-  margin-bottom: 0.2rem;
+  margin-bottom: 0.625rem;
+  padding-bottom: 0.5rem;
+  border-bottom: 1px solid #2d3748;
+}
+
+.tooltipGrid {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 0.25rem 1rem;
+  margin: 0 0 0;
+}
+
+.tooltipGrid dt {
+  color: #718096;
+  font-size: 0.75rem;
+}
+
+.tooltipGrid dd {
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: #cbd5e0;
+  text-align: right;
+  margin: 0;
+  font-variant-numeric: tabular-nums;
 }
 
 .scoreVal {
   color: #e2e8f0;
+  font-weight: 700;
+}
+
+.tooltipExplanation {
+  font-size: 0.6875rem;
+  color: #718096;
+  line-height: 1.5;
+  margin: 0.625rem 0 0;
+  padding-top: 0.5rem;
+  border-top: 1px solid #2d3748;
+  white-space: normal;
+  max-width: 260px;
+}
+
+.detailPanel {
+  position: absolute;
+  top: 1rem;
+  right: 1rem;
+  width: 220px;
+  background: #161c2a;
+  border: 1px solid #2d3748;
+  border-radius: 10px;
+  padding: 0.875rem 1rem 1rem;
+  font-size: 0.8125rem;
+  color: #a0aec0;
+  line-height: 1.5;
+  z-index: 40;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.5);
+}
+
+.detailClose {
+  position: absolute;
+  top: 0.5rem;
+  right: 0.625rem;
+  background: none;
+  border: none;
+  color: #4a5568;
+  font-size: 1.125rem;
+  line-height: 1;
+  cursor: pointer;
+  padding: 0;
+}
+.detailClose:hover {
+  color: #a0aec0;
+}
+
+.detailName {
+  font-size: 0.9375rem;
+  font-weight: 700;
+  color: #e2e8f0;
+  margin-bottom: 0.5rem;
+  padding-bottom: 0.5rem;
+  padding-right: 1.25rem;
+  border-bottom: 1px solid #2d3748;
+  display: flex;
+  align-items: baseline;
+  gap: 0.5rem;
+}
+
+.detailCode {
+  font-size: 0.75rem;
+  font-weight: 400;
+  color: #4a5568;
+}
+
+.detailScoreRow {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  margin-bottom: 0.5rem;
+}
+
+.detailScoreLabel {
+  font-size: 0.6875rem;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: #718096;
+}
+
+.detailScoreVal {
+  font-size: 1.5rem;
+  font-weight: 700;
+  color: #e2e8f0;
+  font-variant-numeric: tabular-nums;
+}
+
+.detailGrid {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 0.2rem 0.75rem;
+  margin: 0;
+}
+
+.detailGrid dt {
+  color: #718096;
+  font-size: 0.75rem;
+}
+
+.detailGrid dd {
+  font-size: 0.75rem;
   font-weight: 600;
+  color: #cbd5e0;
+  text-align: right;
+  margin: 0;
+  font-variant-numeric: tabular-nums;
+}
+
+.detailDivider {
+  margin-top: 0.4rem !important;
+  padding-top: 0.4rem;
+  border-top: 1px solid #2d3748;
+}
+
+.detailExplanation {
+  font-size: 0.6875rem;
+  color: #718096;
+  line-height: 1.5;
+  margin: 0.625rem 0 0;
+  padding-top: 0.5rem;
+  border-top: 1px solid #2d3748;
+  white-space: normal;
 }
 
 .legend {

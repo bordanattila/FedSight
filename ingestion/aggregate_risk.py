@@ -24,6 +24,20 @@ from psycopg2.extras import execute_values
 load_dotenv()
 log = logging.getLogger(__name__)
 
+# Static FEMA region assignments (https://www.fema.gov/about/organization/regions)
+FEMA_REGION_MAP: dict[str, int] = {
+    "CT": 1, "ME": 1, "MA": 1, "NH": 1, "RI": 1, "VT": 1,
+    "NJ": 2, "NY": 2, "PR": 2, "VI": 2,
+    "DC": 3, "DE": 3, "MD": 3, "PA": 3, "VA": 3, "WV": 3,
+    "AL": 4, "FL": 4, "GA": 4, "KY": 4, "MS": 4, "NC": 4, "SC": 4, "TN": 4,
+    "IL": 5, "IN": 5, "MI": 5, "MN": 5, "OH": 5, "WI": 5,
+    "AR": 6, "LA": 6, "NM": 6, "OK": 6, "TX": 6,
+    "IA": 7, "KS": 7, "MO": 7, "NE": 7,
+    "CO": 8, "MT": 8, "ND": 8, "SD": 8, "UT": 8, "WY": 8,
+    "AZ": 9, "CA": 9, "HI": 9, "NV": 9, "GU": 9, "AS": 9,
+    "AK": 10, "ID": 10, "OR": 10, "WA": 10,
+}
+
 # Weights (must sum to 1.0); spending_gap is redistributed when null
 WEIGHTS = {
     "disaster_count":    0.30,
@@ -84,13 +98,15 @@ ON CONFLICT (state_code) DO UPDATE SET
 
 FETCH_SUMMARY_SQL = """
 SELECT
-    state_code,
-    total_declarations,
-    declarations_last_5_years,
-    declarations_last_10_years,
-    hurricane_count,
-    most_recent_disaster_year
-FROM state_disaster_summary
+    sds.state_code,
+    s.state_name,
+    sds.total_declarations,
+    sds.declarations_last_5_years,
+    sds.declarations_last_10_years,
+    sds.hurricane_count,
+    sds.most_recent_disaster_year
+FROM state_disaster_summary sds
+JOIN states s ON s.state_code = sds.state_code
 """
 
 
@@ -102,18 +118,53 @@ def minmax(values: list[float]) -> list[float]:
 
 
 def build_explanation(row: dict) -> str:
-    parts = [
-        f"{row['total_declarations']} total FEMA declarations",
-        f"{row['declarations_last_5_years']} in the last 5 years",
-        f"{row['hurricane_count']} hurricane declaration(s)",
-    ]
-    if row["final_risk_score"] >= 75:
-        tier = "High risk"
-    elif row["final_risk_score"] >= 45:
-        tier = "Moderate risk"
+    state_name = row["state_name"]
+    final = row["final_risk_score"]
+    d_score = row["disaster_count_score"]
+    r_score = row["recent_activity_score"]
+    h_score = row["hurricane_exposure_score"]
+    total = row["total_declarations"]
+    last5 = row["declarations_last_5_years"]
+    hurr = row["hurricane_count"]
+
+    if final >= 75:
+        tier = "high"
+    elif final >= 45:
+        tier = "moderate"
     else:
-        tier = "Lower risk"
-    return f"{tier}. {'; '.join(parts)}."
+        tier = "lower"
+
+    factors: list[str] = []
+    if d_score >= 70:
+        factors.append("a high FEMA disaster declaration history")
+    elif d_score >= 40:
+        factors.append("a moderate FEMA disaster declaration history")
+
+    if r_score >= 70:
+        factors.append("substantial recent activity")
+    elif r_score >= 40:
+        factors.append("moderate recent activity")
+
+    if h_score >= 70:
+        factors.append("repeated hurricane-related declarations")
+    elif h_score >= 40:
+        factors.append("notable hurricane exposure")
+
+    if len(factors) >= 3:
+        reason = f"it combines {factors[0]} with {factors[1]} and {factors[2]}"
+    elif len(factors) == 2:
+        reason = f"it combines {factors[0]} with {factors[1]}"
+    elif len(factors) == 1:
+        reason = f"of {factors[0]}"
+    else:
+        reason = "of consistently limited disaster activity across all tracked categories"
+
+    sentence1 = f"{state_name} ranks as {tier} risk because {reason}."
+
+    hurr_clause = f" and {hurr:,} hurricane declarations" if hurr > 0 else ""
+    sentence2 = f"It has {total:,} total declarations, including {last5:,} in the last five years{hurr_clause}."
+
+    return f"{sentence1} {sentence2}"
 
 
 def compute_scores(conn) -> None:
@@ -207,6 +258,16 @@ def compute_scores(conn) -> None:
 def run() -> None:
     conn = psycopg2.connect(os.environ["DATABASE_URL"])
     try:
+        log.info("Backfilling fema_region on states table")
+        with conn.cursor() as cur:
+            execute_values(
+                cur,
+                "UPDATE states SET fema_region = data.region FROM (VALUES %s) AS data(code, region) WHERE states.state_code = data.code",
+                list(FEMA_REGION_MAP.items()),
+            )
+        conn.commit()
+        log.info("fema_region backfill complete")
+
         log.info("Aggregating fema_disaster_declarations → state_disaster_summary")
         with conn.cursor() as cur:
             cur.execute(AGGREGATE_SQL)

@@ -20,8 +20,14 @@ _RISK_QUERY = text("""
         srs.explanation,
         sds.total_declarations,
         sds.major_disaster_declarations,
+        sds.emergency_declarations,
         sds.hurricane_count,
+        sds.flood_count,
+        sds.fire_count,
+        sds.severe_storm_count,
+        sds.tornado_count,
         sds.declarations_last_5_years,
+        sds.declarations_last_10_years,
         sds.most_recent_disaster_year
     FROM states s
     JOIN state_risk_scores srs ON s.state_code = srs.state_code

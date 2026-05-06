@@ -5,11 +5,21 @@ import {
   YAxis,
   CartesianGrid,
   Tooltip,
-  Cell,
   ResponsiveContainer,
 } from "recharts";
 import type { StateRisk } from "../types";
+import type { Filters } from "../lib/filterStates";
 import styles from "./RiskBarChart.module.css";
+
+function buildFilterLabel(filters: Filters): string {
+  const parts: string[] = [];
+  if (filters.incidentType) parts.push(filters.incidentType);
+  if (filters.femaRegion) parts.push(`Region ${filters.femaRegion}`);
+  if (filters.declarationType) parts.push(filters.declarationType);
+  if (filters.timeRange === "last5") parts.push("Last 5 Years");
+  else if (filters.timeRange === "last10") parts.push("Last 10 Years");
+  return parts.length > 0 ? parts.join(" / ") : "All States";
+}
 
 function barColor(score: number | null): string {
   if (score === null) return "#4a5568";
@@ -40,22 +50,46 @@ function CustomTooltip({ active, payload }: { active?: boolean; payload?: Toolti
   );
 }
 
-interface Props {
-  states: StateRisk[];
+interface BarShapeProps {
+  x?: number;
+  y?: number;
+  width?: number;
+  height?: number;
+  payload?: { final_risk_score: number | null };
 }
 
-export function RiskBarChart({ states }: Props) {
-  // Sort descending so highest risk is at top
+function ColoredBar({ x = 0, y = 0, width = 0, height = 0, payload }: BarShapeProps) {
+  const score = payload?.final_risk_score ?? null;
+  return (
+    <rect
+      x={x}
+      y={y}
+      width={Math.max(0, width)}
+      height={Math.max(0, height)}
+      fill={barColor(score)}
+      rx={2}
+      ry={2}
+    />
+  );
+}
+
+interface Props {
+  states: StateRisk[];
+  filters: Filters;
+}
+
+export function RiskBarChart({ states, filters }: Props) {
   const data = [...states].sort(
     (a, b) => (b.final_risk_score ?? 0) - (a.final_risk_score ?? 0)
   );
 
   return (
     <section className={styles.section}>
-      <h2 className={styles.heading}>Risk Score — All States</h2>
+      <h2 className={styles.heading}>Risk Score — {buildFilterLabel(filters)}</h2>
       <div className={styles.chartWrap}>
         <ResponsiveContainer width="100%" height={Math.max(400, data.length * 22)}>
           <BarChart
+            key={data.map((d) => d.state_code).join(",")}
             layout="vertical"
             data={data}
             margin={{ top: 0, right: 40, bottom: 0, left: 8 }}
@@ -77,11 +111,7 @@ export function RiskBarChart({ states }: Props) {
               axisLine={false}
             />
             <Tooltip content={<CustomTooltip />} cursor={{ fill: "rgba(255,255,255,0.04)" }} />
-            <Bar dataKey="final_risk_score" radius={[0, 3, 3, 0]} maxBarSize={16}>
-              {data.map((entry) => (
-                <Cell key={entry.state_code} fill={barColor(entry.final_risk_score)} />
-              ))}
-            </Bar>
+            <Bar dataKey="final_risk_score" maxBarSize={16} shape={<ColoredBar />} />
           </BarChart>
         </ResponsiveContainer>
       </div>

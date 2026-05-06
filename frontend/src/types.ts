@@ -12,8 +12,14 @@ export interface StateRisk {
 
   total_declarations: number | null;
   major_disaster_declarations: number | null;
+  emergency_declarations: number | null;
   hurricane_count: number | null;
+  flood_count: number | null;
+  fire_count: number | null;
+  severe_storm_count: number | null;
+  tornado_count: number | null;
   declarations_last_5_years: number | null;
+  declarations_last_10_years: number | null;
   most_recent_disaster_year: number | null;
 }
 
