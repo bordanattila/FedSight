@@ -80,15 +80,19 @@ def test_full_pipeline_with_spending(db):
 
     # -- 2. FEMA declarations --
     # TX: 3 total — 2 Hurricane (DR), 1 Flood (DR)
-    # FL: 2 total — 2 Hurricane (DR)
+    # TX: 3 total, 2 Hurricane, 1 Flood — 2 within the last 5 years.
+    # FL: 2 total, 2 Hurricane         — 2 within the last 5 years.
+    # Equal recency, but TX has more total declarations, so TX ends up with
+    # a higher risk percentile and (combined with lower spending/declaration)
+    # a clearly positive spending_gap_score vs FL's negative one.
     with db.cursor() as cur:
         cur.execute("""
             INSERT INTO fema_disaster_declarations
                 (disaster_number, state_code, declaration_type,
                  declaration_date, incident_type, source_id)
             VALUES
-                (1001, 'TX', 'DR', '2020-06-01', 'Hurricane', 'tx-1'),
-                (1002, 'TX', 'DR', '2015-03-01', 'Flood',     'tx-2'),
+                (1001, 'TX', 'DR', '2023-06-01', 'Hurricane', 'tx-1'),
+                (1002, 'TX', 'DR', '2022-01-01', 'Flood',     'tx-2'),
                 (1003, 'TX', 'EM', '2010-01-01', 'Hurricane', 'tx-3'),
                 (2001, 'FL', 'DR', '2022-09-01', 'Hurricane', 'fl-1'),
                 (2002, 'FL', 'DR', '2021-08-01', 'Hurricane', 'fl-2')
