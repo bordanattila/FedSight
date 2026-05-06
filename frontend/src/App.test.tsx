@@ -1,8 +1,22 @@
-import { render, screen, fireEvent } from "@testing-library/react";
+import { render, screen, fireEvent, within } from "@testing-library/react";
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import App from "./App";
 import { fetchAllStateRisks } from "./api";
 import type { StateRisk } from "./types";
+
+vi.mock("recharts", () => ({
+  ResponsiveContainer: ({ children }: any) => <>{children}</>,
+  BarChart: ({ children, data }: any) => (
+    <div data-testid="bar-chart" data-item-count={String(data?.length ?? 0)}>
+      {children}
+    </div>
+  ),
+  Bar: () => null,
+  XAxis: () => null,
+  YAxis: () => null,
+  CartesianGrid: () => null,
+  Tooltip: () => null,
+}));
 
 vi.mock("./api");
 const mockFetch = vi.mocked(fetchAllStateRisks);
@@ -29,12 +43,13 @@ function makeState(overrides: Partial<StateRisk>): StateRisk {
     declarations_last_5_years: 10,
     declarations_last_10_years: 25,
     most_recent_disaster_year: 2023,
+    obligation_amount: null,
     ...overrides,
   };
 }
 
-const FL = makeState({ state_code: "FL", state_name: "Florida",    fema_region: 4,  final_risk_score: 88.0, hurricane_count: 30 });
-const TX = makeState({ state_code: "TX", state_name: "Texas",      fema_region: 6,  final_risk_score: 84.0, hurricane_count: 15 });
+const FL = makeState({ state_code: "FL", state_name: "Florida",    fema_region: 4,  final_risk_score: 88.0, hurricane_count: 30, obligation_amount: 8_000_000_000 });
+const TX = makeState({ state_code: "TX", state_name: "Texas",      fema_region: 6,  final_risk_score: 84.0, hurricane_count: 15, obligation_amount: 5_000_000_000 });
 const CA = makeState({ state_code: "CA", state_name: "California", fema_region: 9,  final_risk_score: 72.0, hurricane_count: 0  });
 const AK = makeState({ state_code: "AK", state_name: "Alaska",     fema_region: 10, final_risk_score: 30.0, hurricane_count: 0  });
 const ME = makeState({ state_code: "ME", state_name: "Maine",      fema_region: 1,  final_risk_score: 20.0, hurricane_count: 0  });
@@ -109,5 +124,17 @@ describe("App — filter integration", () => {
     fireEvent.change(screen.getByLabelText(/incident type/i), { target: { value: "Hurricane" } });
     fireEvent.change(screen.getByLabelText(/fema region/i), { target: { value: "10" } });
     expect(screen.getByText(/no states match/i)).toBeInTheDocument();
+  });
+
+  it("spending chart reflects the active filter", async () => {
+    await setup();
+    const spendingSection = screen.getByTestId("spending-chart");
+
+    // Unfiltered: FL and TX have obligation_amount; CA, AK, ME do not → 2 bars.
+    expect(within(spendingSection).getByTestId("bar-chart")).toHaveAttribute("data-item-count", "2");
+
+    // Filter to Region 4 → only FL passes → 1 bar.
+    fireEvent.change(screen.getByLabelText(/fema region/i), { target: { value: "4" } });
+    expect(within(spendingSection).getByTestId("bar-chart")).toHaveAttribute("data-item-count", "1");
   });
 });

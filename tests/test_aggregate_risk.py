@@ -11,6 +11,7 @@ from ingestion.aggregate_risk import (
     build_explanation,
     compute_scores,
     AGGREGATE_SQL,
+    FEMA_REGION_MAP,
 )
 
 
@@ -215,6 +216,31 @@ class TestComputeScores:
 # Aggregation SQL — structural guarantees
 # ---------------------------------------------------------------------------
 
+# ---------------------------------------------------------------------------
+# FEMA_REGION_MAP — static data sanity checks
+# ---------------------------------------------------------------------------
+
+class TestFemaRegionMap:
+    def test_tx_is_region_6(self):
+        assert FEMA_REGION_MAP["TX"] == 6
+
+    def test_fl_is_region_4(self):
+        assert FEMA_REGION_MAP["FL"] == 4
+
+    def test_ca_is_region_9(self):
+        assert FEMA_REGION_MAP["CA"] == 9
+
+    def test_all_regions_are_1_through_10(self):
+        for code, region in FEMA_REGION_MAP.items():
+            assert 1 <= region <= 10, f"{code} maps to out-of-range region {region}"
+
+    def test_covers_50_states_plus_territories(self):
+        # 50 states + DC + PR + VI + GU + AS = 55 minimum
+        assert len(FEMA_REGION_MAP) >= 55
+
+
+# ---------------------------------------------------------------------------
+
 class TestAggregateSql:
     def test_groups_by_state_code(self):
         assert "GROUP BY state_code" in AGGREGATE_SQL
@@ -227,3 +253,122 @@ class TestAggregateSql:
 
     def test_sources_fema_disaster_declarations(self):
         assert "fema_disaster_declarations" in AGGREGATE_SQL
+
+    def test_fetch_summary_joins_usaspending(self):
+        from ingestion.aggregate_risk import FETCH_SUMMARY_SQL
+        assert "usaspending_disaster_spending" in FETCH_SUMMARY_SQL
+        assert "obligation_amount" in FETCH_SUMMARY_SQL
+
+
+# ---------------------------------------------------------------------------
+# spending_gap_score — fixture helpers
+# ---------------------------------------------------------------------------
+
+_COLS_WITH_SPENDING = [
+    "state_code",
+    "state_name",
+    "total_declarations",
+    "declarations_last_5_years",
+    "declarations_last_10_years",
+    "hurricane_count",
+    "most_recent_disaster_year",
+    "obligation_amount",
+]
+
+_THREE_STATES_WITH_SPENDING = [
+    ("TX", "Texas",      200, 30, 60, 15, 2024, 5_000_000_000),
+    ("FL", "Florida",    180, 25, 50, 30, 2023, 8_000_000_000),
+    ("CA", "California", 100, 10, 20,  0, 2022, 3_000_000_000),
+]
+
+
+def _mock_conn_spending(rows=_THREE_STATES_WITH_SPENDING):
+    cur = MagicMock()
+    cur.__enter__ = lambda s: s
+    cur.__exit__ = MagicMock(return_value=False)
+    cur.description = [(col,) for col in _COLS_WITH_SPENDING]
+    cur.fetchall.return_value = list(rows)
+    conn = MagicMock()
+    conn.cursor.return_value = cur
+    return conn, cur
+
+
+# ---------------------------------------------------------------------------
+# compute_scores() — spending gap integration
+# ---------------------------------------------------------------------------
+
+class TestSpendingGapScore:
+    @patch("ingestion.aggregate_risk.execute_values")
+    def test_gap_score_is_float_when_all_states_have_obligations(self, mock_ev):
+        conn, _ = _mock_conn_spending()
+        compute_scores(conn)
+        for row in mock_ev.call_args[0][2]:
+            state, d, r, h, gap, final, explanation = row
+            assert isinstance(gap, float), f"{state}: expected float gap, got {gap!r}"
+
+    @patch("ingestion.aggregate_risk.execute_values")
+    def test_gap_score_is_none_without_obligation_data(self, mock_ev):
+        # Existing fixture has no obligation_amount column → falls back to None
+        conn, _ = _mock_conn(_THREE_STATES)
+        compute_scores(conn)
+        for row in mock_ev.call_args[0][2]:
+            assert row[4] is None
+
+    @patch("ingestion.aggregate_risk.execute_values")
+    def test_final_score_bounded_with_spending(self, mock_ev):
+        conn, _ = _mock_conn_spending()
+        compute_scores(conn)
+        for row in mock_ev.call_args[0][2]:
+            assert 0.0 <= row[5] <= 100.0
+
+    @patch("ingestion.aggregate_risk.execute_values")
+    def test_gap_score_can_be_negative(self, mock_ev):
+        # A state with low risk but non-zero spending percentile gets a negative gap
+        conn, _ = _mock_conn_spending()
+        compute_scores(conn)
+        rows = {r[0]: r for r in mock_ev.call_args[0][2]}
+        assert any(r[4] < 0 for r in rows.values()), "expected at least one negative gap score"
+
+    @patch("ingestion.aggregate_risk.execute_values")
+    def test_higher_declarations_per_dollar_gives_higher_gap_score(self, mock_ev):
+        # TX: 200 decl / $5B → lowest spending per decl, high risk → highest gap
+        # CA: 100 decl / $3B → low risk → negative gap
+        conn, _ = _mock_conn_spending()
+        compute_scores(conn)
+        rows = {r[0]: r for r in mock_ev.call_args[0][2]}
+        assert rows["TX"][4] > rows["CA"][4]
+
+    @patch("ingestion.aggregate_risk.execute_values")
+    def test_highest_risk_lowest_spending_has_most_positive_gap(self, mock_ev):
+        # TX has highest risk and lowest spending per declaration → largest gap
+        conn, _ = _mock_conn_spending()
+        compute_scores(conn)
+        rows = {r[0]: r for r in mock_ev.call_args[0][2]}
+        assert rows["TX"][4] > rows["FL"][4]
+        assert rows["TX"][4] > rows["CA"][4]
+
+    @patch("ingestion.aggregate_risk.execute_values")
+    def test_one_missing_obligation_falls_back_to_three_factor(self, mock_ev):
+        # If any state lacks obligation data, gap must be None for all
+        mixed = list(_THREE_STATES_WITH_SPENDING)
+        mixed[2] = ("CA", "California", 100, 10, 20, 0, 2022, None)
+        conn, _ = _mock_conn_spending(mixed)
+        compute_scores(conn)
+        for row in mock_ev.call_args[0][2]:
+            assert row[4] is None
+
+    @patch("ingestion.aggregate_risk.execute_values")
+    def test_zero_declarations_does_not_raise(self, mock_ev):
+        # max(total_declarations, 1) prevents division by zero in spending_per_decl
+        zero_decl = list(_THREE_STATES_WITH_SPENDING)
+        zero_decl[2] = ("CA", "California", 0, 0, 0, 0, 2022, 1_000_000_000)
+        conn, _ = _mock_conn_spending(zero_decl)
+        compute_scores(conn)  # must not raise
+        mock_ev.assert_called_once()
+
+    @patch("ingestion.aggregate_risk.execute_values")
+    def test_state_order_preserved_with_spending(self, mock_ev):
+        conn, _ = _mock_conn_spending()
+        compute_scores(conn)
+        codes = [r[0] for r in mock_ev.call_args[0][2]]
+        assert codes == ["TX", "FL", "CA"]

@@ -28,6 +28,8 @@ class StateRisk(BaseModel):
     declarations_last_10_years: Optional[int] = None
     most_recent_disaster_year: Optional[int] = None
 
+    obligation_amount: Optional[float] = None
+
     model_config = {"from_attributes": True}
 
 

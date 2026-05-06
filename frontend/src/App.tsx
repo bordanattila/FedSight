@@ -6,6 +6,7 @@ import type { Filters } from "./lib/filterStates";
 import { FilterBar } from "./components/FilterBar";
 import { TopRiskCards } from "./components/TopRiskCards";
 import { RiskBarChart } from "./components/RiskBarChart";
+import { SpendingChart } from "./components/SpendingChart";
 import { RiskMap } from "./components/RiskMap";
 import { RankedTable } from "./components/RankedTable";
 import styles from "./App.module.css";
@@ -88,6 +89,7 @@ export default function App() {
                 <TopRiskCards states={filtered.slice(0, 3)} />
                 <RiskMap states={filtered} />
                 <RiskBarChart states={filtered} filters={filters} />
+                <SpendingChart states={filtered} filters={filters} />
                 <RankedTable states={filtered} />
               </>
             )}

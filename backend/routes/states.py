@@ -28,10 +28,12 @@ _RISK_QUERY = text("""
         sds.tornado_count,
         sds.declarations_last_5_years,
         sds.declarations_last_10_years,
-        sds.most_recent_disaster_year
+        sds.most_recent_disaster_year,
+        usd.obligation_amount
     FROM states s
     JOIN state_risk_scores srs ON s.state_code = srs.state_code
     JOIN state_disaster_summary sds ON s.state_code = sds.state_code
+    LEFT JOIN usaspending_disaster_spending usd ON usd.state_code = s.state_code
     ORDER BY srs.final_risk_score DESC NULLS LAST
 """)
 

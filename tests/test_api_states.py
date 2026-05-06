@@ -23,7 +23,8 @@ _MOCK_ROWS = [
         "disaster_count_score": 90.0,
         "recent_activity_score": 85.0,
         "hurricane_exposure_score": 95.0,
-        "spending_gap_score": None,
+        "spending_gap_score": 24.5,
+        "obligation_amount": 8_000_000_000,
         "explanation": "High risk. 300 total FEMA declarations; 40 in the last 5 years; 30 hurricane declaration(s).",
         "total_declarations": 300,
         "major_disaster_declarations": 250,
@@ -139,9 +140,25 @@ class TestGetAllStateRisks:
         scores = [s["final_risk_score"] for s in states if s["final_risk_score"] is not None]
         assert scores == sorted(scores, reverse=True)
 
-    def test_spending_gap_is_null(self, client):
+    def test_spending_gap_score_returned_when_present(self, client):
         states = client.get("/api/states/risk").json()["states"]
-        assert all(s["spending_gap_score"] is None for s in states)
+        fl = next(s for s in states if s["state_code"] == "FL")
+        assert fl["spending_gap_score"] == 24.5
+
+    def test_obligation_amount_returned_when_present(self, client):
+        states = client.get("/api/states/risk").json()["states"]
+        fl = next(s for s in states if s["state_code"] == "FL")
+        assert fl["obligation_amount"] == 8_000_000_000
+
+    def test_spending_gap_score_is_null_when_not_ingested(self, client):
+        states = client.get("/api/states/risk").json()["states"]
+        tx = next(s for s in states if s["state_code"] == "TX")
+        assert tx["spending_gap_score"] is None
+
+    def test_obligation_amount_is_null_when_not_ingested(self, client):
+        states = client.get("/api/states/risk").json()["states"]
+        ca = next(s for s in states if s["state_code"] == "CA")
+        assert ca["obligation_amount"] is None
 
 
 # ---------------------------------------------------------------------------

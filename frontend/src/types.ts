@@ -21,6 +21,8 @@ export interface StateRisk {
   declarations_last_5_years: number | null;
   declarations_last_10_years: number | null;
   most_recent_disaster_year: number | null;
+
+  obligation_amount: number | null;
 }
 
 export interface StatesRiskResponse {

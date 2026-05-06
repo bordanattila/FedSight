@@ -20,8 +20,11 @@ load_dotenv()
 
 log = logging.getLogger(__name__)
 
-API_URL = "https://www.fema.gov/api/open/v2/DisasterDeclarationsSummaries"
-PAGE_SIZE = 1000
+API_URL = os.getenv(
+    "FEMA_API_URL",
+    "https://www.fema.gov/api/open/v2/DisasterDeclarationsSummaries",
+)
+PAGE_SIZE = int(os.getenv("FEMA_PAGE_SIZE", "1000"))
 
 STATE_NAMES = {
     "AL": "Alabama", "AK": "Alaska", "AZ": "Arizona", "AR": "Arkansas",

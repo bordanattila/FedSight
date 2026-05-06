@@ -40,10 +40,10 @@ FEMA_REGION_MAP: dict[str, int] = {
 
 # Weights (must sum to 1.0); spending_gap is redistributed when null
 WEIGHTS = {
-    "disaster_count":    0.30,
-    "recent_activity":   0.35,
-    "hurricane_exposure": 0.25,
-    "spending_gap":      0.10,
+    "disaster_count":     float(os.getenv("RISK_WEIGHT_DISASTER_COUNT",    "0.30")),
+    "recent_activity":    float(os.getenv("RISK_WEIGHT_RECENT_ACTIVITY",   "0.35")),
+    "hurricane_exposure": float(os.getenv("RISK_WEIGHT_HURRICANE_EXPOSURE","0.25")),
+    "spending_gap":       float(os.getenv("RISK_WEIGHT_SPENDING_GAP",      "0.10")),
 }
 
 AGGREGATE_SQL = """
@@ -104,9 +104,11 @@ SELECT
     sds.declarations_last_5_years,
     sds.declarations_last_10_years,
     sds.hurricane_count,
-    sds.most_recent_disaster_year
+    sds.most_recent_disaster_year,
+    usd.obligation_amount
 FROM state_disaster_summary sds
 JOIN states s ON s.state_code = sds.state_code
+LEFT JOIN usaspending_disaster_spending usd ON usd.state_code = sds.state_code
 """
 
 
@@ -115,6 +117,14 @@ def minmax(values: list[float]) -> list[float]:
     if hi == lo:
         return [50.0] * len(values)
     return [round((v - lo) / (hi - lo) * 100, 2) for v in values]
+
+
+def _fmt_obligation(amount: float | None) -> str:
+    if amount is None:
+        return "unknown"
+    if amount >= 1_000_000_000:
+        return f"${amount / 1_000_000_000:.1f}B"
+    return f"${amount / 1_000_000:.0f}M"
 
 
 def build_explanation(row: dict) -> str:
@@ -126,6 +136,8 @@ def build_explanation(row: dict) -> str:
     total = row["total_declarations"]
     last5 = row["declarations_last_5_years"]
     hurr = row["hurricane_count"]
+    gap = row.get("spending_gap_score")
+    obligation = row.get("obligation_amount")
 
     if final >= 75:
         tier = "high"
@@ -164,7 +176,32 @@ def build_explanation(row: dict) -> str:
     hurr_clause = f" and {hurr:,} hurricane declarations" if hurr > 0 else ""
     sentence2 = f"It has {total:,} total declarations, including {last5:,} in the last five years{hurr_clause}."
 
-    return f"{sentence1} {sentence2}"
+    sentences = [sentence1, sentence2]
+
+    if gap is not None:
+        oblg_str = _fmt_obligation(obligation)
+        if gap >= 25:
+            sentences.append(
+                f"{state_name} has a high funding gap ({gap:+.0f} points): disaster risk is high "
+                f"but federal obligation spending is low relative to peer states ({oblg_str} total)."
+            )
+        elif gap >= 10:
+            sentences.append(
+                f"{state_name} has a moderate funding gap ({gap:+.0f} points): federal obligations "
+                f"({oblg_str}) are somewhat below what its disaster risk profile would suggest."
+            )
+        elif gap >= 0:
+            sentences.append(
+                f"{state_name}'s federal obligation spending ({oblg_str}) is roughly proportional "
+                f"to its disaster risk profile ({gap:+.0f} points)."
+            )
+        else:
+            sentences.append(
+                f"{state_name} receives relatively high federal obligations ({oblg_str}) compared "
+                f"to its disaster risk score ({gap:+.0f} points), suggesting it is well-funded."
+            )
+
+    return " ".join(sentences)
 
 
 def compute_scores(conn) -> None:
@@ -180,45 +217,86 @@ def compute_scores(conn) -> None:
     state_codes = [r["state_code"] for r in rows]
 
     # Raw signal columns
-    total       = [r["total_declarations"] for r in rows]
+    total      = [r["total_declarations"] for r in rows]
     # Blend 5-year (weight 2) and 10-year (weight 1) for recency sensitivity
-    recency     = [r["declarations_last_5_years"] * 2 + r["declarations_last_10_years"] for r in rows]
-    hurricanes  = [r["hurricane_count"] for r in rows]
+    recency    = [r["declarations_last_5_years"] * 2 + r["declarations_last_10_years"] for r in rows]
+    hurricanes = [r["hurricane_count"] for r in rows]
 
     disaster_scores  = minmax(total)
     recency_scores   = minmax(recency)
     hurricane_scores = minmax(hurricanes)
 
-    # spending_gap_score is null until USAspending layer is loaded;
-    # redistribute its 10% weight proportionally across the other three
-    active_weight = 1.0 - WEIGHTS["spending_gap"]
-    w_d = WEIGHTS["disaster_count"]   / active_weight
-    w_r = WEIGHTS["recent_activity"]  / active_weight
-    w_h = WEIGHTS["hurricane_exposure"] / active_weight
+    # spending_gap_score: activate only when every state has obligation data so
+    # that final scores remain comparable across the full dataset.
+    obligations = [r.get("obligation_amount") for r in rows]
+    has_all_spending = all(o is not None for o in obligations)
+
+    if has_all_spending:
+        # Preliminary risk using 3-factor weights (spending_gap's 10% redistributed)
+        active = 1.0 - WEIGHTS["spending_gap"]
+        wd0 = WEIGHTS["disaster_count"] / active
+        wr0 = WEIGHTS["recent_activity"] / active
+        wh0 = WEIGHTS["hurricane_exposure"] / active
+        prelim_risk = [
+            wd0 * disaster_scores[i] + wr0 * recency_scores[i] + wh0 * hurricane_scores[i]
+            for i in range(len(rows))
+        ]
+        risk_percentiles = minmax(prelim_risk)
+
+        spending_per_decl = [
+            float(r["obligation_amount"]) / max(r["total_declarations"], 1)
+            for r in rows
+        ]
+        spending_percentiles = minmax(spending_per_decl)
+
+        # Signed difference: positive = high risk / low spending; negative = well-funded
+        gap_scores: list[float | None] = [
+            round(risk_percentiles[i] - spending_percentiles[i], 2)
+            for i in range(len(rows))
+        ]  # type: ignore[assignment]
+        w_d = WEIGHTS["disaster_count"]
+        w_r = WEIGHTS["recent_activity"]
+        w_h = WEIGHTS["hurricane_exposure"]
+        w_g = WEIGHTS["spending_gap"]
+        log.info("Spending gap data present — using 4-factor weights")
+    else:
+        gap_scores = [None] * len(rows)
+        active = 1.0 - WEIGHTS["spending_gap"]
+        w_d = WEIGHTS["disaster_count"] / active
+        w_r = WEIGHTS["recent_activity"] / active
+        w_h = WEIGHTS["hurricane_exposure"] / active
+        w_g = 0.0
 
     score_rows = []
     for i, state_code in enumerate(state_codes):
         d = disaster_scores[i]
         r = recency_scores[i]
         h = hurricane_scores[i]
-        final = round(w_d * d + w_r * r + w_h * h, 2)
+        g = gap_scores[i]
+
+        if g is not None:
+            # Negative gap (well-funded) does not reduce a state's final risk score
+            g_contrib = max(0.0, min(100.0, g))
+            final = round(w_d * d + w_r * r + w_h * h + w_g * g_contrib, 2)
+        else:
+            final = round(w_d * d + w_r * r + w_h * h, 2)
 
         row_data = {
             **rows[i],
             "disaster_count_score":    d,
             "recent_activity_score":   r,
             "hurricane_exposure_score": h,
+            "spending_gap_score":      g,
             "final_risk_score":        final,
         }
-        row_data["final_risk_score"] = final
         explanation = build_explanation(row_data)
 
         score_rows.append((
             state_code,
-            d,       # disaster_count_score
-            r,       # recent_activity_score
-            h,       # hurricane_exposure_score
-            None,    # spending_gap_score (pending USAspending)
+            d,     # disaster_count_score
+            r,     # recent_activity_score
+            h,     # hurricane_exposure_score
+            g,     # spending_gap_score (None until USAspending ingested)
             final,
             explanation,
         ))

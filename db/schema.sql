@@ -96,6 +96,19 @@ CREATE TABLE state_risk_scores (
     UNIQUE(state_code)
 );
 
+CREATE TABLE usaspending_disaster_spending (
+    id SERIAL PRIMARY KEY,
+
+    state_code VARCHAR(2) NOT NULL REFERENCES states(state_code),
+
+    obligation_amount NUMERIC(18, 2),
+    def_codes TEXT,
+
+    fetched_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+
+    UNIQUE(state_code)
+);
+
 -- Indexes for common query patterns
 CREATE INDEX idx_fema_state_code ON fema_disaster_declarations(state_code);
 CREATE INDEX idx_fema_incident_type ON fema_disaster_declarations(incident_type);
