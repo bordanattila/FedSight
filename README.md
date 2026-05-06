@@ -10,6 +10,8 @@ Decision-support tool for FEMA-style regional risk analysis. Combines FEMA disas
 
 ![State risk map with click-to-pin detail panel](assets/state_map.png)
 
+![Federal disaster spending by state (USAspending obligations)](assets/dis_spending.png)
+
 ## Tech Stack
 
 | Layer | Technology |
@@ -84,7 +86,10 @@ python -m ingestion.fema_declarations --state TX
 python -m ingestion.aggregate_risk
 ```
 
-USAspending and NOAA ingestion scripts are pending (build steps 4–5).
+# 3. Load USAspending federal obligation data
+python -m ingestion.usaspending
+
+# NOAA hurricane track ingestion is pending (build step 5).
 
 ## API Endpoints
 
@@ -114,9 +119,9 @@ Each state receives a `final_risk_score` built from four sub-scores stored in `s
 | `disaster_count_score` | FEMA declaration frequency | 30% |
 | `recent_activity_score` | Declarations in last 5 / 10 years | 35% |
 | `hurricane_exposure_score` | Hurricane-type FEMA declarations | 25% |
-| `spending_gap_score` | USAspending obligations vs. disaster severity | 10% *(pending)* |
+| `spending_gap_score` | Risk percentile minus spending-per-declaration percentile | 10% |
 
-All sub-scores are min-max normalized to 0–100. `spending_gap_score` is `null` until the USAspending layer is loaded; its 10% weight is redistributed proportionally across the other three.
+All sub-scores are min-max normalized to 0–100. A positive `spending_gap_score` means high disaster risk relative to federal obligation spending; negative means well-funded relative to risk. When USAspending data is absent the 10% weight is redistributed proportionally across the other three.
 
 ## Testing
 

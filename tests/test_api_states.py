@@ -4,7 +4,7 @@ The database session is overridden with a mock so no real DB is needed.
 """
 
 import pytest
-from unittest.mock import MagicMock, patch
+from unittest.mock import MagicMock
 from fastapi.testclient import TestClient
 
 from backend.main import app
@@ -25,6 +25,7 @@ _MOCK_ROWS = [
         "hurricane_exposure_score": 95.0,
         "spending_gap_score": 24.5,
         "obligation_amount": 8_000_000_000,
+        "obligation_per_declaration": 26_666_666.67,
         "explanation": "High risk. 300 total FEMA declarations; 40 in the last 5 years; 30 hurricane declaration(s).",
         "total_declarations": 300,
         "major_disaster_declarations": 250,
@@ -69,9 +70,6 @@ _MOCK_ROWS = [
 
 def _make_db_override(rows=_MOCK_ROWS):
     """Return a get_db override whose execute().mappings().all() yields *rows*."""
-    mapping_list = [MagicMock(**{"__getitem__": lambda s, k: row[k], **row}) for row in rows]
-
-    # mappings().all() returns objects that support dict() conversion
     class _Mapping(dict):
         pass
 
@@ -159,6 +157,21 @@ class TestGetAllStateRisks:
         states = client.get("/api/states/risk").json()["states"]
         ca = next(s for s in states if s["state_code"] == "CA")
         assert ca["obligation_amount"] is None
+
+    def test_obligation_per_declaration_returned_when_present(self, client):
+        states = client.get("/api/states/risk").json()["states"]
+        fl = next(s for s in states if s["state_code"] == "FL")
+        assert fl["obligation_per_declaration"] == 26_666_666.67
+
+    def test_obligation_per_declaration_is_null_when_not_ingested(self, client):
+        states = client.get("/api/states/risk").json()["states"]
+        ca = next(s for s in states if s["state_code"] == "CA")
+        assert ca["obligation_per_declaration"] is None
+
+    def test_fema_region_returned_and_not_null(self, client):
+        states = client.get("/api/states/risk").json()["states"]
+        fl = next(s for s in states if s["state_code"] == "FL")
+        assert fl["fema_region"] == 4
 
 
 # ---------------------------------------------------------------------------

@@ -29,7 +29,11 @@ _RISK_QUERY = text("""
         sds.declarations_last_5_years,
         sds.declarations_last_10_years,
         sds.most_recent_disaster_year,
-        usd.obligation_amount
+        usd.obligation_amount,
+        CASE
+            WHEN sds.total_declarations > 0 AND usd.obligation_amount IS NOT NULL
+            THEN usd.obligation_amount / sds.total_declarations
+        END AS obligation_per_declaration
     FROM states s
     JOIN state_risk_scores srs ON s.state_code = srs.state_code
     JOIN state_disaster_summary sds ON s.state_code = sds.state_code
